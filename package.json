@@ -1,0 +1,16 @@
+{
+  "name": "kozeki",
+  "version": "1.0.0",
+  "description": "A basic discord moderation bot",
+  "license": "ISC",
+  "author": "Samrat",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7"
+  }
+}
