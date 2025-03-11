@@ -75,9 +75,9 @@ client.on('interactionCreate', async interaction => {
         const uptimeString = `${days}d ${hours}h ${minutes}m ${seconds}s`;
 
         const embed = {
-            color: 0x0099ff,
+            color: 0xe983d8,
             title: 'Kozeki Bot Information',
-            description: 'A Discord moderation bot with timeout and ban management capabilities.',
+            description: 'A Discord moderation bot that I hope will reduce a lot of manual labor.',
             fields: [
                 { name: 'Version', value: version, inline: true },
                 { name: 'Uptime', value: uptimeString, inline: true },
@@ -85,7 +85,7 @@ client.on('interactionCreate', async interaction => {
             ],
             timestamp: new Date().toISOString(),
             footer: {
-                text: 'Made with ❤️ by Samrat'
+                text: 'Made with 🤍 by Samrat'
             }
         };
 
@@ -104,6 +104,24 @@ client.on('messageCreate', async message => {
     const content = message.content.trim();
     const args = content.split(' ');
     const command = args[0].toLowerCase();
+
+    // Check for introduce command
+    if (message.mentions.has(client.user) &&
+        content.toLowerCase().includes('introduce yourself') &&
+        message.mentions.members.size === 1) {
+        const embed = {
+            color: 0xe983d8, // Pink color
+            // color: 0xFF69B4, // Pink color
+            title: '✨ Hewwo! I\'m Kozeki! ✨',
+            description: 'Konnichiwa! (｡♥‿♥｡) I\'m your friendly neighborhood moderation assistant built by Samrat! 🌸\n\nI\'m here to help keep this server safe and comfy for everyone! I can timeout naughty users, give timeouts when needed, and even handle bans if someone\'s being really mean! >_<\n\nJust use these commands and I\'ll take care of it~\n\n• `km @user [time] [reason]` - Time someone out (⋟﹏⋞)\n• `kum @user` - Remove timeout (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧\n• `kb @user [reason]` - Ban someone (｡•́︿•̀｡)\n• `kub userId` - Unban someone ╰(*°▽°*)╯\n\nLeave it to me to keep things peaceful! (◕‿◕✿)',
+            footer: {
+                text: '💕 Made with love by Samrat'
+            }
+        };
+
+        await message.channel.send({ embeds: [embed] });
+        return;
+    }
 
     // Handle mute command: km @User [duration] [reason]
     if (command === 'km') {

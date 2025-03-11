@@ -90,6 +90,20 @@ kub @User
 
 **Example:** `kub @John` - Unbans John
 
+### Bot Information
+
+```
+/info
+```
+
+Use this slash command to get detailed information about the bot, including:
+- Current version
+- Available commands
+- Bot status
+- Support information
+
+**Example:** `/info` - Displays an embedded message with comprehensive bot information
+
 ## Important Notes
 
 - **Admin/Mod Only**: Only moderators and administrators can use these commands
