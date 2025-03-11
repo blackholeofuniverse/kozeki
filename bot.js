@@ -1,6 +1,7 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Partials, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const path = require('path');
+const { version } = require('./package.json');
 
 // Create a new client instance
 const client = new Client({
@@ -37,9 +38,59 @@ function hasModPermissions(member) {
         member.permissions.has(PermissionFlagsBits.Administrator);
 }
 
+// Create slash commands
+const commands = [
+    new SlashCommandBuilder()
+        .setName('info')
+        .setDescription('Get information about the bot')
+];
+
 // When the client is ready, run this code (only once)
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
+
+    try {
+        const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands }
+        );
+        console.log('Successfully registered application commands.');
+    } catch (error) {
+        console.error('Error registering application commands:', error);
+    }
+});
+
+// Handle slash command interactions
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === 'info') {
+        const uptime = Math.floor(process.uptime());
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = uptime % 60;
+
+        const uptimeString = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+
+        const embed = {
+            color: 0x0099ff,
+            title: 'Kozeki Bot Information',
+            description: 'A Discord moderation bot with timeout and ban management capabilities.',
+            fields: [
+                { name: 'Version', value: version, inline: true },
+                { name: 'Uptime', value: uptimeString, inline: true },
+                { name: 'Commands', value: '```\nkm @user [duration] [reason] - Mute user\nkum @user - Unmute user\nkb @user [reason] - Ban user\nkub @user - Unban user\n/info - Show this info\n```' }
+            ],
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: 'Made with ❤️ by Samrat'
+            }
+        };
+
+        await interaction.reply({ embeds: [embed] });
+    }
 });
 
 // Listen for messages
@@ -112,7 +163,7 @@ client.on('messageCreate', async message => {
 
         try {
             await mentionedUser.timeout(null); // Remove timeout
-            message.channel.send(`🔓 Done! Unmuted ${mentionedUser}`);
+            message.channel.send(`<:yessir:1348944055605661767> Done! Unmuted ${mentionedUser}`);
         } catch (error) {
             console.error('Error unmuting user:', error);
             message.channel.send('Failed to unmute user. Make sure I have the correct permissions.');
@@ -134,7 +185,7 @@ client.on('messageCreate', async message => {
 
         try {
             await mentionedUser.ban({ reason });
-            message.channel.send(`🔨 Done! Banned ${mentionedUser}. Reason: ${reason}`);
+            message.channel.send(`<:ban:1348945066542104697> Done! Banned ${mentionedUser}. Reason: ${reason}`);
         } catch (error) {
             console.error('Error banning user:', error);
             message.channel.send('Failed to ban user. Make sure I have the correct permissions.');
@@ -165,7 +216,7 @@ client.on('messageCreate', async message => {
 
         try {
             await message.guild.members.unban(userId);
-            message.channel.send(`🎊 Done! Unbanned <@${userId}>`);
+            message.channel.send(`<:yessir:1348944055605661767> Done! Unbanned <@${userId}>`);
         } catch (error) {
             console.error('Error unbanning user:', error);
             message.channel.send('Failed to unban user. The user may not be banned or I don\'t have the correct permissions.');
