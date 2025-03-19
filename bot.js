@@ -15,6 +15,65 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
+// Channel ID for logging moderation actions
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID
+
+// Function to send logs to the log channel
+async function sendModLog(guild, action, moderator, target, reason, duration = null) {
+    try {
+        const logChannel = await guild.channels.fetch(LOG_CHANNEL_ID);
+        if (!logChannel) return console.error('Log channel not found');
+
+        let color;
+        let emoji;
+
+        switch (action) {
+            case 'mute':
+                color = 0xFFA500; // Orange
+                emoji = '<a:bonk:1348931006152839228>';
+                break;
+            case 'unmute':
+                color = 0x00FF00; // Green
+                emoji = '<:yessir:1348944055605661767>';
+                break;
+            case 'ban':
+                color = 0xFF0000; // Red
+                emoji = '<:ban:1348945066542104697>';
+                break;
+            case 'unban':
+                color = 0x00FF00; // Green
+                emoji = '<:yessir:1348944055605661767>';
+                break;
+            default:
+                color = 0xe983d8; // Default pink
+                emoji = '📝';
+        }
+
+        const embed = {
+            color: color,
+            title: `${emoji} Moderation Action: ${action.charAt(0).toUpperCase() + action.slice(1)}`,
+            fields: [
+                { name: 'Moderator', value: `${moderator.tag}`, inline: true },
+                { name: 'User', value: target.toString(), inline: true },
+                { name: 'Reason', value: reason || 'No reason provided' }
+            ],
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: `User ID: ${typeof target === 'string' ? target : target.id}`
+            }
+        };
+
+        // Add duration field for mutes
+        if (duration) {
+            embed.fields.push({ name: 'Duration', value: duration, inline: true });
+        }
+
+        await logChannel.send({ embeds: [embed] });
+    } catch (error) {
+        console.error('Error sending mod log:', error);
+    }
+}
+
 // Parse duration string to milliseconds
 function parseDuration(durationStr) {
     if (!durationStr) return 10 * 60 * 1000; // Default: 10 minutes
@@ -163,6 +222,9 @@ client.on('messageCreate', async message => {
         try {
             await mentionedUser.timeout(durationMs, reason);
             message.channel.send(`<a:bonk:1348931006152839228> Done! Muted ${mentionedUser} for ${duration}. Reason: ${reason}`);
+
+            // Log the mute action
+            await sendModLog(message.guild, 'mute', message.author, mentionedUser, reason, duration);
         } catch (error) {
             console.error('Error muting user:', error);
             message.channel.send('Failed to mute user. Make sure I have the correct permissions.');
@@ -182,6 +244,9 @@ client.on('messageCreate', async message => {
         try {
             await mentionedUser.timeout(null); // Remove timeout
             message.channel.send(`<:yessir:1348944055605661767> Done! Unmuted ${mentionedUser}`);
+
+            // Log the unmute action
+            await sendModLog(message.guild, 'unmute', message.author, mentionedUser, 'Timeout removed');
         } catch (error) {
             console.error('Error unmuting user:', error);
             message.channel.send('Failed to unmute user. Make sure I have the correct permissions.');
@@ -204,6 +269,9 @@ client.on('messageCreate', async message => {
         try {
             await mentionedUser.ban({ reason });
             message.channel.send(`<:ban:1348945066542104697> Done! Banned ${mentionedUser}. Reason: ${reason}`);
+
+            // Log the ban action
+            await sendModLog(message.guild, 'ban', message.author, mentionedUser, reason);
         } catch (error) {
             console.error('Error banning user:', error);
             message.channel.send('Failed to ban user. Make sure I have the correct permissions.');
@@ -235,6 +303,9 @@ client.on('messageCreate', async message => {
         try {
             await message.guild.members.unban(userId);
             message.channel.send(`<:yessir:1348944055605661767> Done! Unbanned <@${userId}>`);
+
+            // Log the unban action
+            await sendModLog(message.guild, 'unban', message.author, userId, 'User unbanned');
         } catch (error) {
             console.error('Error unbanning user:', error);
             message.channel.send('Failed to unban user. The user may not be banned or I don\'t have the correct permissions.');
