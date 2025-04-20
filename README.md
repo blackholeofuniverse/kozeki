@@ -16,7 +16,7 @@ A simple yet powerful Discord moderation bot designed to help server administrat
 
 - Node.js (v16.9.0 or higher)
 - A Discord Bot Token
-- Proper bot permissions in your Discord server
+- Proper bot permissions in your Discord server (including VIEW_AUDIT_LOG permission)
 
 ### Installation
 
@@ -25,10 +25,13 @@ A simple yet powerful Discord moderation bot designed to help server administrat
    ```
    npm install
    ```
-3. Create a `.env` file in the root directory with your Discord bot token:
+3. Create a `.env` file in the root directory with your Discord bot token and log channel ID:
    ```
    DISCORD_TOKEN=your_bot_token_here
+   LOG_CHANNEL_ID=your_log_channel_id_here
    ```
+   
+   Note: The LOG_CHANNEL_ID must be a text channel ID from the same server where the bot is being used.
 4. Start the bot:
    ```
    node index.js
@@ -113,8 +116,10 @@ Use this slash command to get detailed information about the bot, including:
 
 ## Troubleshooting
 
-- Ensure the bot has the correct permissions in your server
+- Ensure the bot has the correct permissions in your server, especially the "View Audit Log" permission
 - Verify that your bot token is correctly set in the `.env` file
+- Make sure the LOG_CHANNEL_ID in your `.env` file is a valid channel ID from the server where you're using the bot
+- If you see "Log channel does not belong to this guild" error, check that you're using the correct channel ID for the current server
 - Check that the bot's role is positioned higher than the roles of users you want to moderate
 
 ## Detailed Documentation

@@ -10,7 +10,9 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildModeration
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildBans,
+        GatewayIntentBits.GuildPresences
     ],
     partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
@@ -21,6 +23,14 @@ const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID
 // Function to send logs to the log channel
 async function sendModLog(guild, action, moderator, target, reason, duration = null) {
     try {
+        // First check if the log channel exists in this guild
+        const guildChannels = Array.from(guild.channels.cache.values());
+        const logChannelInGuild = guildChannels.some(channel => channel.id === LOG_CHANNEL_ID);
+
+        if (!logChannelInGuild) {
+            return console.error(`Log channel (ID: ${LOG_CHANNEL_ID}) does not belong to this guild (${guild.name})`);
+        }
+
         const logChannel = await guild.channels.fetch(LOG_CHANNEL_ID);
         if (!logChannel) return console.error('Log channel not found');
 
@@ -43,6 +53,10 @@ async function sendModLog(guild, action, moderator, target, reason, duration = n
             case 'unban':
                 color = 0x00FF00; // Green
                 emoji = '<:yessir:1348944055605661767>';
+                break;
+            case 'info':
+                color = 0x3498DB; // Blue
+                emoji = '📊';
                 break;
             default:
                 color = 0xe983d8; // Default pink
@@ -140,7 +154,7 @@ client.on('interactionCreate', async interaction => {
             fields: [
                 { name: 'Version', value: version, inline: true },
                 { name: 'Uptime', value: uptimeString, inline: true },
-                { name: 'Commands', value: '```\nkm @user [duration] [reason] - Mute user\nkum @user - Unmute user\nkb @user [reason] - Ban user\nkub @user - Unban user\n/info - Show this info\n```' }
+                { name: 'Commands', value: '```\nkm @user [duration] [reason] - Mute user\nki @user - Show user info and history\nkum @user - Unmute user\nkb @user [reason] - Ban user\nkub @user - Unban user\n/info - Show this info\n```' }
             ],
             timestamp: new Date().toISOString(),
             footer: {
@@ -148,7 +162,19 @@ client.on('interactionCreate', async interaction => {
             }
         };
 
-        await interaction.reply({ embeds: [embed] });
+        try {
+            await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error('Error replying to interaction:', error);
+            // If the interaction has already been acknowledged, try to follow up instead
+            if (error.code === 40060) {
+                try {
+                    await interaction.followUp({ embeds: [embed] });
+                } catch (followUpError) {
+                    console.error('Error sending follow-up:', followUpError);
+                }
+            }
+        }
     }
 });
 
@@ -172,7 +198,7 @@ client.on('messageCreate', async message => {
             color: 0xe983d8, // Pink color
             // color: 0xFF69B4, // Pink color
             title: '✨ Hewwo! I\'m Kozeki! ✨',
-            description: 'Konnichiwa! (｡♥‿♥｡) I\'m your friendly neighborhood moderation assistant built by Samrat! 🌸\n\nI\'m here to help keep this server safe and comfy for everyone! I can timeout naughty users, give timeouts when needed, and even handle bans if someone\'s being really mean! >_<\n\nJust use these commands and I\'ll take care of it~\n\n• `km @user [time] [reason]` - Time someone out (⋟﹏⋞)\n• `kum @user` - Remove timeout (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧\n• `kb @user [reason]` - Ban someone (｡•́︿•̀｡)\n• `kub userId` - Unban someone ╰(*°▽°*)╯\n\nLeave it to me to keep things peaceful! (◕‿◕✿)',
+            description: 'Konnichiwa! (｡♥‿♥｡) I\'m your friendly neighborhood moderation assistant built by Samrat! 🌸\n\nI\'m here to help keep this server safe and comfy for everyone! I can timeout naughty users, give timeouts when needed, and even handle bans if someone\'s being really mean! >_<\n\nJust use these commands and I\'ll take care of it~\n\n• `km @user [time] [reason]` - Time someone out (⋟﹏⋞)\n• `ki @user` - Show user info and history (✧ω✧)\n• `kum @user` - Remove timeout (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧\n• `kb @user [reason]` - Ban someone (｡•́︿•̀｡)\n• `kub userId` - Unban someone ╰(*°▽°*)╯\n\nLeave it to me to keep things peaceful! (◕‿◕✿)',
             footer: {
                 text: '💕 Made with love by Samrat'
             }
@@ -182,11 +208,121 @@ client.on('messageCreate', async message => {
         return;
     }
 
-    // Handle mute command: km @User [duration] [reason]
-    if (command === 'km') {
+    // Handle user info command: ki @User
+    if (command === 'ki') {
         const mentionedUser = message.mentions.members.first();
         if (!mentionedUser) return;
 
+        // Check if bot has permission to view audit logs
+        if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
+            return message.channel.send('I don\'t have permission to view audit logs. Please make sure I have the "View Audit Log" permission in the server settings.');
+        }
+
+        try {
+            // Send a loading message
+            const loadingMsg = await message.channel.send('📊 Fetching user information...');
+
+            // Get user join date
+            const joinDate = mentionedUser.joinedAt;
+            const creationDate = mentionedUser.user.createdAt;
+            const daysSinceCreation = Math.floor((Date.now() - creationDate) / (1000 * 60 * 60 * 24));
+            const daysSinceJoin = Math.floor((Date.now() - joinDate) / (1000 * 60 * 60 * 24));
+
+            // Check if account is suspicious (created recently)
+            const isNewAccount = daysSinceCreation < 30;
+
+            // Get ban history from audit logs
+            const banLogs = await message.guild.fetchAuditLogs({
+                type: 22, // BAN_ADD
+                limit: 100
+            });
+
+            // Filter logs for this user
+            const userBanLogs = banLogs.entries.filter(entry => entry.target.id === mentionedUser.id);
+
+            // Get unban history
+            const unbanLogs = await message.guild.fetchAuditLogs({
+                type: 23, // BAN_REMOVE
+                limit: 100
+            });
+
+            // Filter logs for this user
+            const userUnbanLogs = unbanLogs.entries.filter(entry => entry.target.id === mentionedUser.id);
+
+            // Get timeout history
+            const timeoutLogs = await message.guild.fetchAuditLogs({
+                type: 24, // MEMBER_UPDATE (includes timeouts)
+                limit: 100
+            });
+
+            // Filter logs for this user's timeouts
+            const userTimeoutLogs = timeoutLogs.entries.filter(entry =>
+                entry.target.id === mentionedUser.id &&
+                entry.changes.some(change => change.key === 'communication_disabled_until')
+            );
+
+            // Create embed for user info
+            const embed = {
+                color: 0xe983d8,
+                title: `📊 User Information: ${mentionedUser.user.tag}`,
+                thumbnail: {
+                    url: mentionedUser.user.displayAvatarURL({ dynamic: true })
+                },
+                fields: [
+                    { name: '👤 User', value: `${mentionedUser.toString()} (${mentionedUser.user.tag})`, inline: false },
+                    { name: '🆔 User ID', value: mentionedUser.id, inline: true },
+                    { name: '📆 Account Created', value: `<t:${Math.floor(creationDate.getTime() / 1000)}:R> (${daysSinceCreation} days ago)`, inline: true },
+                    { name: '📥 Joined Server', value: `<t:${Math.floor(joinDate.getTime() / 1000)}:R> (${daysSinceJoin} days ago)`, inline: true },
+                    { name: '🚩 Suspicious Account', value: isNewAccount ? '⚠️ Yes - Account less than 30 days old' : '✅ No', inline: false },
+                    {
+                        name: '🔨 Ban History', value: userBanLogs.size > 0 ?
+                            userBanLogs.map(entry => `<t:${Math.floor(entry.createdAt.getTime() / 1000)}:R> by ${entry.executor.tag} for: ${entry.reason || 'No reason provided'}`).join('\n') :
+                            'No ban history found', inline: false
+                    },
+                    {
+                        name: '🔓 Unban History', value: userUnbanLogs.size > 0 ?
+                            userUnbanLogs.map(entry => `<t:${Math.floor(entry.createdAt.getTime() / 1000)}:R> by ${entry.executor.tag}`).join('\n') :
+                            'No unban history found', inline: false
+                    },
+                    {
+                        name: '⏱️ Timeout History', value: userTimeoutLogs.size > 0 ?
+                            userTimeoutLogs.map(entry => {
+                                const timeoutEndValue = entry.changes.find(change => change.key === 'communication_disabled_until')?.new;
+                                return timeoutEndValue ?
+                                    `<t:${Math.floor(entry.createdAt.getTime() / 1000)}:R> by ${entry.executor.tag} until ${timeoutEndValue}` :
+                                    `<t:${Math.floor(entry.createdAt.getTime() / 1000)}:R> by ${entry.executor.tag}`;
+                            }).join('\n') :
+                            'No timeout history found', inline: false
+                    },
+                    {
+                        name: '🎭 Roles', value: mentionedUser.roles.cache.size > 1 ?
+                            mentionedUser.roles.cache.filter(role => role.id !== message.guild.id).map(role => role.toString()).join(', ') :
+                            'No roles', inline: false
+                    }
+                ],
+                timestamp: new Date().toISOString(),
+                footer: {
+                    text: `Requested by ${message.author.tag}`
+                }
+            };
+
+            // Edit the loading message with the embed
+            await loadingMsg.edit({ content: null, embeds: [embed] });
+
+            // Log the info action
+            await sendModLog(message.guild, 'info', message.author, mentionedUser, 'User information requested');
+        } catch (error) {
+            console.error('Error fetching user info:', error);
+            message.channel.send('Failed to fetch user information. Make sure I have the correct permissions.');
+        }
+    }
+
+    // Handle mute command: km @User [duration] [reason]
+    else if (command === 'km') {
+        const mentionedUser = message.mentions.members.first();
+        if (!mentionedUser) return;
+
+        // Regular mute command continues below
         // Check if bot has permission to timeout members
         if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ModerateMembers)) {
             return message.channel.send('I don\'t have permission to timeout members.');
